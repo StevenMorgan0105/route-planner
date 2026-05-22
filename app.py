@@ -32,8 +32,7 @@ DEFAULT_ESTIMATOR_HOMES = {
     "Lindsay": "Chickamauga, GA",
 }
 
-# This gets stronger as the day gets later.
-# It helps the last assignments land closer to the estimator's home when possible.
+# Gets stronger as the day gets later so final stops trend closer to home when possible.
 HOME_PULL_BY_BLOCK_INDEX = [0.0, 0.2, 0.5, 1.25, 2.5, 4.0]
 
 LEAD_COLUMNS = [
@@ -56,9 +55,12 @@ PRIORITY_SCORE = {
 @dataclass
 class Estimator:
     name: str
-    start_address: str
     home_address: str
     available_blocks: List[str]
+
+    @property
+    def start_address(self) -> str:
+        return self.home_address
 
 
 @dataclass
@@ -164,6 +166,7 @@ def parse_blocks(value) -> List[str]:
             chosen.append(alias_map[simplified])
             continue
 
+        # Allow typing just a block start time like "2:30".
         for label in BLOCK_LABELS:
             if simplified == simplify_block_text(label.split("-")[0]):
                 chosen.append(label)
@@ -427,26 +430,17 @@ def build_routes(estimators: List[Estimator], leads: List[Lead], client):
             "final_drive_home": final_drive_home,
         }
 
-    return routes, unassigned_with_home_reason(remaining), route_summaries
+    return routes, remaining, route_summaries
 
 
-def unassigned_with_home_reason(remaining: List[Lead]) -> List[Lead]:
-    return remaining
-
-
-def maps_link(start_address: str, rows: List[dict], end_address: Optional[str] = None) -> str:
+def maps_link(home_address: str, rows: List[dict]) -> str:
     if not rows:
         return ""
 
     stop_addresses = [row["Address"] for row in rows]
-    origin = urllib.parse.quote_plus(start_address)
-
-    if end_address:
-        destination = urllib.parse.quote_plus(end_address)
-        waypoints = "|".join(urllib.parse.quote_plus(address) for address in stop_addresses)
-    else:
-        destination = urllib.parse.quote_plus(stop_addresses[-1])
-        waypoints = "|".join(urllib.parse.quote_plus(address) for address in stop_addresses[:-1])
+    origin = urllib.parse.quote_plus(home_address)
+    destination = urllib.parse.quote_plus(home_address)
+    waypoints = "|".join(urllib.parse.quote_plus(address) for address in stop_addresses)
 
     url = (
         f"https://www.google.com/maps/dir/?api=1"
@@ -485,7 +479,7 @@ st.set_page_config(page_title="Estimator Route Planner", page_icon="🌲", layou
 
 st.title("Estimator Route Planner")
 st.caption("Add leads, choose customer estimate blocks, assign estimators, and build suggested daily routes.")
-st.info("Each estimate is assumed to take the full assigned time block. Drive time is used to choose a better route order, not to shorten or move the block. The app also tries to place later stops closer to each estimator's home when possible.")
+st.info("Each estimate is assumed to take the full assigned time block. Estimators start and end from their home location. Drive time is used to choose a better route order and to place later stops closer to home when possible.")
 
 if "leads_df" not in st.session_state:
     st.session_state.leads_df = blank_df()
@@ -530,8 +524,6 @@ working_estimators = st.multiselect(
 if not working_estimators:
     st.warning("Select at least one estimator before building routes.")
 
-default_start_location = st.text_input("Default start location", value="Chattanooga, TN")
-
 estimators = []
 
 if working_estimators:
@@ -540,16 +532,12 @@ if working_estimators:
     for i, estimator_name in enumerate(working_estimators):
         with estimator_cols[i]:
             st.markdown(f"**{estimator_name}**")
-            start_address = st.text_input(
-                f"{estimator_name} start location",
-                value=default_start_location,
-                key=f"start_address_{estimator_name}",
-            )
             home_address = st.text_input(
-                f"{estimator_name} home location",
+                f"{estimator_name} start/end home location",
                 value=DEFAULT_ESTIMATOR_HOMES.get(estimator_name, ""),
                 key=f"home_address_{estimator_name}",
             )
+            st.caption("Start and end location")
             available_blocks = st.multiselect(
                 f"{estimator_name} available blocks",
                 BLOCK_LABELS,
@@ -560,7 +548,6 @@ if working_estimators:
             estimators.append(
                 Estimator(
                     name=estimator_name,
-                    start_address=start_address.strip() or default_start_location,
                     home_address=home_address.strip() or DEFAULT_ESTIMATOR_HOMES.get(estimator_name, ""),
                     available_blocks=available_blocks or BLOCK_LABELS.copy(),
                 )
@@ -705,29 +692,29 @@ if st.button("Build Today's Routes", type="primary", use_container_width=True):
         rows = routes.get(estimator.name, [])
         summary = route_summaries.get(estimator.name, {})
         st.markdown(f"### {estimator.name}")
-        st.caption(f"Home: {summary.get('home_address', estimator.home_address)}")
+        st.caption(f"Start/End home: {summary.get('home_address', estimator.home_address)}")
 
         if not rows:
             st.info("No leads scheduled for this estimator.")
             continue
 
         final_drive = summary.get("final_drive_home", 0)
-        st.info(f"Estimated drive from final stop to home: {final_drive} min")
+        st.info(f"Estimated drive from final stop back home: {final_drive} min")
 
         route_df = pd.DataFrame(rows)
         st.dataframe(route_df, use_container_width=True, hide_index=True)
 
-        link = maps_link(estimator.start_address, rows, estimator.home_address)
+        link = maps_link(estimator.home_address, rows)
         if link:
-            st.markdown(f"[Open {estimator.name}'s route in Google Maps ending near home]({link})")
+            st.markdown(f"[Open {estimator.name}'s full route from home back to home]({link})")
 
         copyable = "\n".join([f"{row['Estimate Block']} - {row['Lead']} - {row['Address']}" for row in rows])
-        copyable += f"\nEnd near home: {estimator.home_address}"
+        copyable = f"Start at home: {estimator.home_address}\n" + copyable + f"\nEnd at home: {estimator.home_address}"
 
         st.text_area(
             f"Copyable schedule for {estimator.name}",
             value=copyable,
-            height=140,
+            height=150,
             key=f"schedule_{estimator.name}",
         )
 
@@ -736,7 +723,8 @@ if st.button("Build Today's Routes", type="primary", use_container_width=True):
                 {
                     "Date": format_date(service_date),
                     "Estimator": estimator.name,
-                    "Estimator Home": estimator.home_address,
+                    "Start Location": estimator.home_address,
+                    "End Location": estimator.home_address,
                     "Final Drive Home (min)": final_drive,
                     **row,
                 }
