@@ -125,14 +125,43 @@ def block_display(blocks: List[str]) -> str:
     return "Any" if not blocks or set(blocks) == set(BLOCK_LABELS) else ", ".join(blocks)
 
 
+def normalize_block_text(value: str) -> str:
+    return (
+        str(value)
+        .lower()
+        .strip()
+        .replace(" ", "")
+        .replace("am", "")
+        .replace("pm", "")
+        .replace("–", "-")
+        .replace("—", "-")
+    )
+
+
 def parse_blocks(v) -> List[str]:
     if isinstance(v, list):
         found = [x for x in v if x in BLOCK_LABELS]
         return found or BLOCK_LABELS.copy()
-    if is_blank(v) or str(v).strip().lower() in ["any", "all", "open"]:
+
+    if is_blank(v):
         return BLOCK_LABELS.copy()
-    simplified = str(v).lower().replace(" ", "").replace("am", "").replace("pm", "")
-    found = [b for b in BLOCK_LABELS if b.lower().replace(" ", "") in simplified or b.split("-")[0].lower() in simplified]
+
+    raw = str(v).strip()
+    if raw.lower() in ["any", "all", "open"]:
+        return BLOCK_LABELS.copy()
+
+    alias_map = {}
+    for label in BLOCK_LABELS:
+        alias_map[normalize_block_text(label)] = label
+        alias_map[normalize_block_text(label.replace(":00", ""))] = label
+
+    pieces = [piece.strip() for piece in re.split(r"[,;|]", raw) if piece.strip()]
+    found: List[str] = []
+    for piece in pieces:
+        match = alias_map.get(normalize_block_text(piece))
+        if match and match not in found:
+            found.append(match)
+
     return found or BLOCK_LABELS.copy()
 
 
