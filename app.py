@@ -15,6 +15,11 @@ try:
 except Exception:
     googlemaps = None
 
+try:
+    from streamlit_searchbox import st_searchbox
+except Exception:
+    st_searchbox = None
+
 
 ESTIMATE_BLOCKS = [
     {"label": "8:15-9:30", "start": dt.time(8, 15), "end": dt.time(9, 30)},
@@ -243,7 +248,7 @@ def google_address_predictions(client, query: str, country_code: str = "us") -> 
     if not client:
         return [], "Add your Google Maps API key in the sidebar or .streamlit/secrets.toml before searching addresses."
     if len(query.strip()) < 3:
-        return [], "Type at least 3 characters."
+        return [], None
     try:
         results = client.places_autocomplete(input_text=query.strip(), types="address", components={"country": country_code})
         return [r.get("description", "") for r in results if r.get("description")], None
@@ -371,8 +376,6 @@ st.markdown("""
 
 if "leads_df" not in st.session_state:
     st.session_state.leads_df = blank_df()
-if "address_suggestions" not in st.session_state:
-    st.session_state.address_suggestions = []
 
 sidebar_brand()
 with st.sidebar:
@@ -425,31 +428,33 @@ st.markdown("</div>", unsafe_allow_html=True)
 estimator_names = [e.name for e in estimators]
 estimator_options = ["Any"] + estimator_names
 
-st.markdown("<div class='section-card'><div class='step-title'><span class='step-pill'>2</span>Add Lead with Google Autocomplete</div>", unsafe_allow_html=True)
+st.markdown("<div class='section-card'><div class='step-title'><span class='step-pill'>2</span>Add Lead with Live Google Autocomplete</div>", unsafe_allow_html=True)
 if not gmaps_client:
     st.warning("Add your Google Maps API key to .streamlit/secrets.toml or paste it in the sidebar to search addresses.")
 
-address_query = st.text_input(
-    "Start typing customer address",
-    placeholder="Example: 123 Main St Chattanooga",
-    help="Suggestions appear automatically after at least 3 characters.",
-)
+
+def address_search(searchterm: str) -> List[str]:
+    if not searchterm or len(searchterm.strip()) < 3 or not gmaps_client:
+        return []
+    suggestions, _ = google_address_predictions(gmaps_client, searchterm, country_code)
+    return suggestions
 
 selected_address = ""
-if not address_query.strip():
-    st.info("Start typing an address. Google suggestions will appear below.")
-elif len(address_query.strip()) < 3:
-    st.info("Keep typing. Suggestions start after 3 characters.")
-elif not gmaps_client:
-    st.warning("Google Maps is not enabled yet. Check your API key in .streamlit/secrets.toml or the sidebar.")
+if st_searchbox is None:
+    st.error("Live autocomplete package is not installed yet. Run: pip install -r requirements.txt")
 else:
-    suggestions, error = google_address_predictions(gmaps_client, address_query, country_code)
-    if error:
-        st.warning(error)
-    elif suggestions:
-        selected_address = st.selectbox("Choose the correct Google address", suggestions, key="google_address_choice")
+    selected_address = st_searchbox(
+        address_search,
+        key="google_address_searchbox",
+        placeholder="Start typing customer address",
+        label="Customer address",
+        default="",
+        clear_on_submit=False,
+    ) or ""
+    if selected_address:
+        st.success(f"Selected Google address: {selected_address}")
     else:
-        st.warning("No matching Google addresses found. Try adding city and state.")
+        st.info("Start typing at least 3 characters and choose a Google suggestion.")
 
 lead_col_1, lead_col_2, lead_col_3 = st.columns([2, 2, 1])
 with lead_col_1:
