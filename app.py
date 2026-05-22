@@ -244,13 +244,40 @@ def clean_df(df: pd.DataFrame) -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
-def google_address_predictions(client, query: str, country_code: str = "us") -> Tuple[List[str], Optional[str]]:
+def geocode_search_center(client, center_text: str) -> Optional[Tuple[float, float]]:
+    if not client or is_blank(center_text):
+        return None
+    try:
+        results = client.geocode(str(center_text).strip())
+        if not results:
+            return None
+        location = results[0]["geometry"]["location"]
+        return float(location["lat"]), float(location["lng"])
+    except Exception:
+        return None
+
+
+def google_address_predictions(
+    client,
+    query: str,
+    country_code: str = "us",
+    location_bias: Optional[Tuple[float, float]] = None,
+    radius_meters: Optional[int] = None,
+) -> Tuple[List[str], Optional[str]]:
     if not client:
         return [], "Add your Google Maps API key in the sidebar or .streamlit/secrets.toml before searching addresses."
     if len(query.strip()) < 3:
         return [], None
     try:
-        results = client.places_autocomplete(input_text=query.strip(), types="address", components={"country": country_code})
+        kwargs = {
+            "input_text": query.strip(),
+            "types": "address",
+            "components": {"country": country_code},
+        }
+        if location_bias and radius_meters:
+            kwargs["location"] = location_bias
+            kwargs["radius"] = radius_meters
+        results = client.places_autocomplete(**kwargs)
         return [r.get("description", "") for r in results if r.get("description")], None
     except Exception as exc:
         return [], f"Google address lookup failed: {exc}"
@@ -395,8 +422,11 @@ with st.sidebar:
     else:
         google_api_key = st.text_input("Google Maps API key", type="password")
     country_code = st.text_input("Autocomplete country code", value="us", max_chars=2).lower()
+    address_search_center = st.text_input("Address search center", value="Chattanooga, TN")
+    address_search_radius_miles = st.number_input("Address search radius", min_value=5, max_value=150, value=45, step=5, help="Used to show nearby/local Google address suggestions first.")
     st.caption("Places API powers address lookup. Distance Matrix powers real drive times.")
     gmaps_client = None
+    address_bias_location = None
     if google_api_key:
         if googlemaps is None:
             st.warning("googlemaps is not installed. Run: pip install googlemaps")
@@ -404,6 +434,11 @@ with st.sidebar:
             try:
                 gmaps_client = googlemaps.Client(key=google_api_key)
                 st.success("Google Maps enabled.")
+                address_bias_location = geocode_search_center(gmaps_client, address_search_center)
+                if address_bias_location:
+                    st.caption(f"Address suggestions biased near {address_search_center} within about {address_search_radius_miles} miles.")
+                else:
+                    st.caption("Could not geocode the search center. Suggestions will not be location-biased.")
             except Exception as exc:
                 st.error(f"Could not load Google Maps: {exc}")
 
@@ -436,7 +471,13 @@ if not gmaps_client:
 def address_search(searchterm: str) -> List[str]:
     if not searchterm or len(searchterm.strip()) < 3 or not gmaps_client:
         return []
-    suggestions, _ = google_address_predictions(gmaps_client, searchterm, country_code)
+    suggestions, _ = google_address_predictions(
+        gmaps_client,
+        searchterm,
+        country_code,
+        address_bias_location,
+        int(address_search_radius_miles * 1609.34),
+    )
     return suggestions
 
 selected_address = ""
