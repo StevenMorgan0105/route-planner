@@ -36,6 +36,13 @@ DEFAULT_ESTIMATOR_HOMES = {
     "Lindsay": "Chickamauga, GA",
 }
 
+# Lindsay permanently does not work the first or last estimate block.
+DEFAULT_ESTIMATOR_BLOCKS = {
+    "Jon": BLOCK_LABELS,
+    "Jut": BLOCK_LABELS,
+    "Lindsay": BLOCK_LABELS[1:-1],
+}
+
 # Pull routes toward home more strongly later in the day.
 HOME_PULL_BY_BLOCK_INDEX = [0.0, 0.2, 0.5, 1.25, 2.5, 4.0]
 
@@ -91,194 +98,34 @@ st.markdown(
     --text: #0f2416;
 }
 
-html, body, [class*="css"] {
-    color: var(--text);
-}
-
-.stApp {
-    background: linear-gradient(135deg, #f7fbf4 0%, #ffffff 50%, #edf7ea 100%);
-}
-
-section[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #043d1d 0%, #075328 55%, #053a1c 100%);
-    border-right: 1px solid rgba(255,255,255,.15);
-}
-
-section[data-testid="stSidebar"] * {
-    color: #ffffff !important;
-}
-
+html, body, [class*="css"] { color: var(--text); }
+.stApp { background: linear-gradient(135deg, #f7fbf4 0%, #ffffff 50%, #edf7ea 100%); }
+section[data-testid="stSidebar"] { background: linear-gradient(180deg, #043d1d 0%, #075328 55%, #053a1c 100%); border-right: 1px solid rgba(255,255,255,.15); }
+section[data-testid="stSidebar"] * { color: #ffffff !important; }
 section[data-testid="stSidebar"] .stTextInput input,
 section[data-testid="stSidebar"] .stDateInput input,
-section[data-testid="stSidebar"] textarea {
-    background: rgba(255,255,255,.12) !important;
-    color: #ffffff !important;
-    border: 1px solid rgba(255,255,255,.25) !important;
-}
-
-section[data-testid="stSidebar"] .stCaptionContainer {
-    color: rgba(255,255,255,.75) !important;
-}
-
-.main .block-container {
-    padding-top: 1.4rem;
-    max-width: 1500px;
-}
-
-.hero-card {
-    background: linear-gradient(135deg, #ffffff 0%, #f0faee 100%);
-    border: 1px solid var(--line);
-    border-radius: 18px;
-    padding: 22px 24px;
-    margin-bottom: 16px;
-    box-shadow: 0 12px 30px rgba(6, 77, 37, .08);
-}
-
-.hero-title {
-    font-size: 2.05rem;
-    font-weight: 900;
-    color: var(--forest);
-    letter-spacing: .02em;
-    margin-bottom: 2px;
-}
-
-.hero-subtitle {
-    font-size: 1rem;
-    color: #395545;
-}
-
-.notice-card {
-    background: #eef9ed;
-    border: 1px solid #b9dfb5;
-    border-left: 6px solid var(--leaf);
-    border-radius: 14px;
-    padding: 14px 16px;
-    margin: 8px 0 20px;
-    color: #123b20;
-}
-
-.section-card {
-    background: rgba(255,255,255,.92);
-    border: 1px solid #dcebd8;
-    border-radius: 16px;
-    padding: 18px;
-    margin: 12px 0 18px;
-    box-shadow: 0 10px 24px rgba(6, 77, 37, .06);
-}
-
-.step-title {
-    color: var(--forest);
-    font-weight: 850;
-    font-size: 1.2rem;
-    margin-bottom: 0.2rem;
-}
-
-.step-pill {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: var(--forest-2);
-    color: white;
-    font-weight: 800;
-    margin-right: 8px;
-}
-
-.estimator-card {
-    border: 1px solid #b9dfb5;
-    background: linear-gradient(180deg, #ffffff 0%, #f1faef 100%);
-    border-radius: 16px;
-    padding: 14px;
-    min-height: 120px;
-    box-shadow: 0 6px 18px rgba(6, 77, 37, .08);
-}
-
-.estimator-name {
-    color: var(--forest);
-    font-size: 1.1rem;
-    font-weight: 850;
-}
-
-.home-line {
-    color: #3c5b43;
-    font-size: .9rem;
-    margin-bottom: .4rem;
-}
-
-.block-chip {
-    display: inline-block;
-    padding: 5px 9px;
-    margin: 3px 4px 3px 0;
-    border-radius: 8px;
-    background: #dff3d9;
-    border: 1px solid #bfe3b8;
-    color: #0b4b22;
-    font-weight: 700;
-    font-size: .8rem;
-}
-
-.route-card {
-    background: #ffffff;
-    border: 1px solid #cfe6ca;
-    border-top: 5px solid var(--forest-2);
-    border-radius: 16px;
-    padding: 16px;
-    box-shadow: 0 8px 22px rgba(6, 77, 37, .06);
-    margin-bottom: 16px;
-}
-
-.metric-strip {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin-top: 10px;
-}
-
-.metric-pill {
-    background: #edf8ea;
-    border: 1px solid #cfe6ca;
-    border-radius: 999px;
-    padding: 7px 11px;
-    color: #0b4b22;
-    font-weight: 750;
-    font-size: .86rem;
-}
-
-.footer-tree {
-    margin-top: 30px;
-    color: #2a6b38;
-    font-weight: 700;
-    text-align: center;
-    opacity: .8;
-}
-
-.stButton > button,
-.stDownloadButton > button {
-    background: linear-gradient(180deg, #0f7a36 0%, #075328 100%) !important;
-    color: white !important;
-    border: 1px solid #064d25 !important;
-    border-radius: 10px !important;
-    font-weight: 800 !important;
-    box-shadow: 0 6px 14px rgba(6, 77, 37, .18);
-}
-
-.stButton > button:hover,
-.stDownloadButton > button:hover {
-    background: linear-gradient(180deg, #148c3f 0%, #08612f 100%) !important;
-    border-color: #043d1d !important;
-}
-
-div[data-testid="stDataFrame"] {
-    border-radius: 14px;
-    overflow: hidden;
-    border: 1px solid #dcebd8;
-}
-
-hr {
-    border-color: rgba(255,255,255,.22) !important;
-}
+section[data-testid="stSidebar"] textarea { background: rgba(255,255,255,.12) !important; color: #ffffff !important; border: 1px solid rgba(255,255,255,.25) !important; }
+section[data-testid="stSidebar"] .stCaptionContainer { color: rgba(255,255,255,.75) !important; }
+.main .block-container { padding-top: 1.4rem; max-width: 1500px; }
+.hero-card { background: linear-gradient(135deg, #ffffff 0%, #f0faee 100%); border: 1px solid var(--line); border-radius: 18px; padding: 22px 24px; margin-bottom: 16px; box-shadow: 0 12px 30px rgba(6, 77, 37, .08); }
+.hero-title { font-size: 2.05rem; font-weight: 900; color: var(--forest); letter-spacing: .02em; margin-bottom: 2px; }
+.hero-subtitle { font-size: 1rem; color: #395545; }
+.notice-card { background: #eef9ed; border: 1px solid #b9dfb5; border-left: 6px solid var(--leaf); border-radius: 14px; padding: 14px 16px; margin: 8px 0 20px; color: #123b20; }
+.section-card { background: rgba(255,255,255,.92); border: 1px solid #dcebd8; border-radius: 16px; padding: 18px; margin: 12px 0 18px; box-shadow: 0 10px 24px rgba(6, 77, 37, .06); }
+.step-title { color: var(--forest); font-weight: 850; font-size: 1.2rem; margin-bottom: 0.2rem; }
+.step-pill { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--forest-2); color: white; font-weight: 800; margin-right: 8px; }
+.estimator-card { border: 1px solid #b9dfb5; background: linear-gradient(180deg, #ffffff 0%, #f1faef 100%); border-radius: 16px; padding: 14px; min-height: 120px; box-shadow: 0 6px 18px rgba(6, 77, 37, .08); }
+.estimator-name { color: var(--forest); font-size: 1.1rem; font-weight: 850; }
+.home-line { color: #3c5b43; font-size: .9rem; margin-bottom: .4rem; }
+.block-chip { display: inline-block; padding: 5px 9px; margin: 3px 4px 3px 0; border-radius: 8px; background: #dff3d9; border: 1px solid #bfe3b8; color: #0b4b22; font-weight: 700; font-size: .8rem; }
+.route-card { background: #ffffff; border: 1px solid #cfe6ca; border-top: 5px solid var(--forest-2); border-radius: 16px; padding: 16px; box-shadow: 0 8px 22px rgba(6, 77, 37, .06); margin-bottom: 16px; }
+.metric-strip { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.metric-pill { background: #edf8ea; border: 1px solid #cfe6ca; border-radius: 999px; padding: 7px 11px; color: #0b4b22; font-weight: 750; font-size: .86rem; }
+.footer-tree { margin-top: 30px; color: #2a6b38; font-weight: 700; text-align: center; opacity: .8; }
+.stButton > button, .stDownloadButton > button { background: linear-gradient(180deg, #0f7a36 0%, #075328 100%) !important; color: white !important; border: 1px solid #064d25 !important; border-radius: 10px !important; font-weight: 800 !important; box-shadow: 0 6px 14px rgba(6, 77, 37, .18); }
+.stButton > button:hover, .stDownloadButton > button:hover { background: linear-gradient(180deg, #148c3f 0%, #08612f 100%) !important; border-color: #043d1d !important; }
+div[data-testid="stDataFrame"] { border-radius: 14px; overflow: hidden; border: 1px solid #dcebd8; }
+hr { border-color: rgba(255,255,255,.22) !important; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -329,6 +176,10 @@ def chips_html(blocks: List[str]) -> str:
     return "".join([f"<span class='block-chip'>{block}</span>" for block in blocks])
 
 
+def estimator_allowed_blocks(estimator_name: str) -> List[str]:
+    return DEFAULT_ESTIMATOR_BLOCKS.get(estimator_name, BLOCK_LABELS)
+
+
 def is_blank(value) -> bool:
     if value is None:
         return True
@@ -362,14 +213,7 @@ def normalize_estimator(value) -> str:
 
 def simplify_block_text(value: str) -> str:
     return (
-        str(value)
-        .lower()
-        .strip()
-        .replace(" ", "")
-        .replace("am", "")
-        .replace("pm", "")
-        .replace("–", "-")
-        .replace("—", "-")
+        str(value).lower().strip().replace(" ", "").replace("am", "").replace("pm", "").replace("–", "-").replace("—", "-")
     )
 
 
@@ -387,8 +231,8 @@ def parse_blocks(value) -> List[str]:
 
     pieces = [piece.strip() for piece in re.split(r"[,;|]", raw) if piece.strip()]
     chosen: List[str] = []
-
     alias_map = {}
+
     for label in BLOCK_LABELS:
         alias_map[simplify_block_text(label)] = label
         alias_map[simplify_block_text(label.replace(":00", ""))] = label
@@ -441,11 +285,7 @@ def google_address_predictions(client, query: str, country_code: str = "us") -> 
     if len(query.strip()) < 3:
         return [], "Type at least 3 characters."
     try:
-        results = client.places_autocomplete(
-            input_text=query.strip(),
-            types="address",
-            components={"country": country_code},
-        )
+        results = client.places_autocomplete(input_text=query.strip(), types="address", components={"country": country_code})
         return [r.get("description", "") for r in results if r.get("description")], None
     except Exception as exc:
         return [], f"Google address lookup failed: {exc}"
@@ -585,16 +425,7 @@ def build_routes(estimators: List[Estimator], leads: List[Lead], client):
         estimate_time = block_time_text(block)
 
         for estimator in estimators:
-            choice = choose_lead_for_slot(
-                estimator=estimator,
-                block_index=block_index,
-                block_label=block_label,
-                current_location=current_locations[estimator.name],
-                remaining=remaining,
-                cache=cache,
-                client=client,
-            )
-
+            choice = choose_lead_for_slot(estimator, block_index, block_label, current_locations[estimator.name], remaining, cache, client)
             if not choice:
                 continue
 
@@ -638,7 +469,6 @@ def maps_link(home_address: str, rows: List[dict]) -> str:
     origin = urllib.parse.quote_plus(home_address)
     destination = urllib.parse.quote_plus(home_address)
     waypoints = "|".join(urllib.parse.quote_plus(address) for address in stop_addresses)
-
     url = f"https://www.google.com/maps/dir/?api=1&origin={origin}&destination={destination}&travelmode=driving"
     if waypoints:
         url += f"&waypoints={waypoints}"
@@ -711,11 +541,7 @@ with st.sidebar:
                 st.error(f"Could not load Google Maps: {exc}")
 
 st.markdown("<div class='section-card'><div class='step-title'><span class='step-pill'>1</span>Who Is Working Today?</div>", unsafe_allow_html=True)
-working_estimators = st.multiselect(
-    "Select estimators working this date",
-    DEFAULT_ESTIMATORS,
-    default=DEFAULT_ESTIMATORS,
-)
+working_estimators = st.multiselect("Select estimators working this date", DEFAULT_ESTIMATORS, default=DEFAULT_ESTIMATORS)
 
 if not working_estimators:
     st.warning("Select at least one estimator before building routes.")
@@ -725,6 +551,7 @@ if working_estimators:
     estimator_cols = st.columns(len(working_estimators))
     for i, estimator_name in enumerate(working_estimators):
         with estimator_cols[i]:
+            allowed_blocks = estimator_allowed_blocks(estimator_name)
             home_address = st.text_input(
                 f"{estimator_name} start/end home location",
                 value=DEFAULT_ESTIMATOR_HOMES.get(estimator_name, ""),
@@ -732,16 +559,18 @@ if working_estimators:
             )
             available_blocks = st.multiselect(
                 f"{estimator_name} available blocks",
-                BLOCK_LABELS,
-                default=BLOCK_LABELS,
+                allowed_blocks,
+                default=allowed_blocks,
                 key=f"estimator_blocks_{estimator_name}",
             )
+            if estimator_name == "Lindsay":
+                st.caption("Lindsay does not use the 8:15-9:30 or 4:00-5:30 blocks.")
             st.markdown(
                 f"""
                 <div class="estimator-card">
                     <div class="estimator-name">🏡 {estimator_name}</div>
                     <div class="home-line">{home_address}</div>
-                    <div>{chips_html(available_blocks or BLOCK_LABELS)}</div>
+                    <div>{chips_html(available_blocks or allowed_blocks)}</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -750,7 +579,7 @@ if working_estimators:
                 Estimator(
                     name=estimator_name,
                     home_address=home_address.strip() or DEFAULT_ESTIMATOR_HOMES.get(estimator_name, ""),
-                    available_blocks=available_blocks or BLOCK_LABELS.copy(),
+                    available_blocks=available_blocks or allowed_blocks.copy(),
                 )
             )
 st.markdown("</div>", unsafe_allow_html=True)
@@ -834,16 +663,8 @@ column_config = {
         help="Use Any, or comma-separated blocks like 8:15-9:30, 2:30-4:00",
         required=True,
     ),
-    "Priority": st.column_config.SelectboxColumn(
-        "Priority",
-        options=["Emergency", "High", "Normal", "Low"],
-        required=True,
-    ),
-    "Required Estimator": st.column_config.SelectboxColumn(
-        "Required Estimator",
-        options=estimator_options,
-        required=True,
-    ),
+    "Priority": st.column_config.SelectboxColumn("Priority", options=["Emergency", "High", "Normal", "Low"], required=True),
+    "Required Estimator": st.column_config.SelectboxColumn("Required Estimator", options=estimator_options, required=True),
 }
 edited_df = st.data_editor(current_df, num_rows="dynamic", use_container_width=True, column_config=column_config, key="lead_editor")
 st.session_state.leads_df = clean_df(edited_df)
