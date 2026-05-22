@@ -15,6 +15,10 @@ except Exception:
     googlemaps = None
 
 
+# -----------------------------
+# Core schedule settings
+# -----------------------------
+
 ESTIMATE_BLOCKS = [
     {"label": "8:15-9:30", "start": dt.time(8, 15), "end": dt.time(9, 30)},
     {"label": "9:30-11:00", "start": dt.time(9, 30), "end": dt.time(11, 0)},
@@ -32,7 +36,7 @@ DEFAULT_ESTIMATOR_HOMES = {
     "Lindsay": "Chickamauga, GA",
 }
 
-# Gets stronger as the day gets later so final stops trend closer to home when possible.
+# Pull routes toward home more strongly later in the day.
 HOME_PULL_BY_BLOCK_INDEX = [0.0, 0.2, 0.5, 1.25, 2.5, 4.0]
 
 LEAD_COLUMNS = [
@@ -44,12 +48,7 @@ LEAD_COLUMNS = [
     "Notes",
 ]
 
-PRIORITY_SCORE = {
-    "Emergency": 5,
-    "High": 4,
-    "Normal": 3,
-    "Low": 2,
-}
+PRIORITY_SCORE = {"Emergency": 5, "High": 4, "Normal": 3, "Low": 2}
 
 
 @dataclass
@@ -73,6 +72,236 @@ class Lead:
     notes: str = ""
 
 
+# -----------------------------
+# Styling
+# -----------------------------
+
+st.set_page_config(page_title="Tree Estimate Route Planner", page_icon="🌲", layout="wide")
+
+st.markdown(
+    """
+<style>
+:root {
+    --forest: #064d25;
+    --forest-2: #0f6b2f;
+    --leaf: #2f9e44;
+    --mint: #eaf7e8;
+    --mint-2: #f4fbf3;
+    --line: #cfe6ca;
+    --text: #0f2416;
+}
+
+html, body, [class*="css"] {
+    color: var(--text);
+}
+
+.stApp {
+    background: linear-gradient(135deg, #f7fbf4 0%, #ffffff 50%, #edf7ea 100%);
+}
+
+section[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #043d1d 0%, #075328 55%, #053a1c 100%);
+    border-right: 1px solid rgba(255,255,255,.15);
+}
+
+section[data-testid="stSidebar"] * {
+    color: #ffffff !important;
+}
+
+section[data-testid="stSidebar"] .stTextInput input,
+section[data-testid="stSidebar"] .stDateInput input,
+section[data-testid="stSidebar"] textarea {
+    background: rgba(255,255,255,.12) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255,255,255,.25) !important;
+}
+
+section[data-testid="stSidebar"] .stCaptionContainer {
+    color: rgba(255,255,255,.75) !important;
+}
+
+.main .block-container {
+    padding-top: 1.4rem;
+    max-width: 1500px;
+}
+
+.hero-card {
+    background: linear-gradient(135deg, #ffffff 0%, #f0faee 100%);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 22px 24px;
+    margin-bottom: 16px;
+    box-shadow: 0 12px 30px rgba(6, 77, 37, .08);
+}
+
+.hero-title {
+    font-size: 2.05rem;
+    font-weight: 900;
+    color: var(--forest);
+    letter-spacing: .02em;
+    margin-bottom: 2px;
+}
+
+.hero-subtitle {
+    font-size: 1rem;
+    color: #395545;
+}
+
+.notice-card {
+    background: #eef9ed;
+    border: 1px solid #b9dfb5;
+    border-left: 6px solid var(--leaf);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin: 8px 0 20px;
+    color: #123b20;
+}
+
+.section-card {
+    background: rgba(255,255,255,.92);
+    border: 1px solid #dcebd8;
+    border-radius: 16px;
+    padding: 18px;
+    margin: 12px 0 18px;
+    box-shadow: 0 10px 24px rgba(6, 77, 37, .06);
+}
+
+.step-title {
+    color: var(--forest);
+    font-weight: 850;
+    font-size: 1.2rem;
+    margin-bottom: 0.2rem;
+}
+
+.step-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--forest-2);
+    color: white;
+    font-weight: 800;
+    margin-right: 8px;
+}
+
+.estimator-card {
+    border: 1px solid #b9dfb5;
+    background: linear-gradient(180deg, #ffffff 0%, #f1faef 100%);
+    border-radius: 16px;
+    padding: 14px;
+    min-height: 120px;
+    box-shadow: 0 6px 18px rgba(6, 77, 37, .08);
+}
+
+.estimator-name {
+    color: var(--forest);
+    font-size: 1.1rem;
+    font-weight: 850;
+}
+
+.home-line {
+    color: #3c5b43;
+    font-size: .9rem;
+    margin-bottom: .4rem;
+}
+
+.block-chip {
+    display: inline-block;
+    padding: 5px 9px;
+    margin: 3px 4px 3px 0;
+    border-radius: 8px;
+    background: #dff3d9;
+    border: 1px solid #bfe3b8;
+    color: #0b4b22;
+    font-weight: 700;
+    font-size: .8rem;
+}
+
+.route-card {
+    background: #ffffff;
+    border: 1px solid #cfe6ca;
+    border-top: 5px solid var(--forest-2);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 8px 22px rgba(6, 77, 37, .06);
+    margin-bottom: 16px;
+}
+
+.metric-strip {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.metric-pill {
+    background: #edf8ea;
+    border: 1px solid #cfe6ca;
+    border-radius: 999px;
+    padding: 7px 11px;
+    color: #0b4b22;
+    font-weight: 750;
+    font-size: .86rem;
+}
+
+.footer-tree {
+    margin-top: 30px;
+    color: #2a6b38;
+    font-weight: 700;
+    text-align: center;
+    opacity: .8;
+}
+
+.stButton > button,
+.stDownloadButton > button {
+    background: linear-gradient(180deg, #0f7a36 0%, #075328 100%) !important;
+    color: white !important;
+    border: 1px solid #064d25 !important;
+    border-radius: 10px !important;
+    font-weight: 800 !important;
+    box-shadow: 0 6px 14px rgba(6, 77, 37, .18);
+}
+
+.stButton > button:hover,
+.stDownloadButton > button:hover {
+    background: linear-gradient(180deg, #148c3f 0%, #08612f 100%) !important;
+    border-color: #043d1d !important;
+}
+
+div[data-testid="stDataFrame"] {
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid #dcebd8;
+}
+
+hr {
+    border-color: rgba(255,255,255,.22) !important;
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+
+# -----------------------------
+# Helpers
+# -----------------------------
+
+def sidebar_brand() -> None:
+    st.sidebar.markdown(
+        """
+        <div style='text-align:center; padding: 10px 0 18px;'>
+            <div style='font-size:3rem; line-height:1;'>🌳</div>
+            <div style='font-size:1.35rem; font-weight:900; letter-spacing:.04em;'>TREE ROUTE</div>
+            <div style='font-size:.88rem; opacity:.82;'>Estimate Planner</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def format_date(date_value: dt.date) -> str:
     return date_value.strftime("%m/%d/%Y")
 
@@ -94,6 +323,10 @@ def block_time_text(block: dict) -> str:
     start = block["start"].strftime("%I:%M %p").lstrip("0")
     end = block["end"].strftime("%I:%M %p").lstrip("0")
     return f"{start} - {end}"
+
+
+def chips_html(blocks: List[str]) -> str:
+    return "".join([f"<span class='block-chip'>{block}</span>" for block in blocks])
 
 
 def is_blank(value) -> bool:
@@ -165,8 +398,6 @@ def parse_blocks(value) -> List[str]:
         if simplified in alias_map:
             chosen.append(alias_map[simplified])
             continue
-
-        # Allow typing just a block start time like "2:30".
         for label in BLOCK_LABELS:
             if simplified == simplify_block_text(label.split("-")[0]):
                 chosen.append(label)
@@ -186,7 +417,6 @@ def blank_df() -> pd.DataFrame:
 
 def clean_df(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-
     for col in LEAD_COLUMNS:
         if col not in df.columns:
             df[col] = ""
@@ -210,7 +440,6 @@ def google_address_predictions(client, query: str, country_code: str = "us") -> 
         return [], "Add a Google Maps API key first."
     if len(query.strip()) < 3:
         return [], "Type at least 3 characters."
-
     try:
         results = client.places_autocomplete(
             input_text=query.strip(),
@@ -224,16 +453,14 @@ def google_address_predictions(client, query: str, country_code: str = "us") -> 
 
 def add_lead(name: str, address: str, available_blocks: List[str], priority: str, required_estimator: str, notes: str) -> None:
     new_row = pd.DataFrame(
-        [
-            {
-                "Lead Name": name.strip() or "Lead",
-                "Address": address.strip(),
-                "Available Blocks": block_display(available_blocks),
-                "Priority": clean_priority(priority),
-                "Required Estimator": normalize_estimator(required_estimator),
-                "Notes": notes.strip(),
-            }
-        ],
+        [{
+            "Lead Name": name.strip() or "Lead",
+            "Address": address.strip(),
+            "Available Blocks": block_display(available_blocks),
+            "Priority": clean_priority(priority),
+            "Required Estimator": normalize_estimator(required_estimator),
+            "Notes": notes.strip(),
+        }],
         columns=LEAD_COLUMNS,
     )
     st.session_state.leads_df = clean_df(pd.concat([st.session_state.leads_df, new_row], ignore_index=True))
@@ -241,51 +468,35 @@ def add_lead(name: str, address: str, available_blocks: List[str], priority: str
 
 def parse_bulk(text: str) -> pd.DataFrame:
     rows = []
-
     for i, line in enumerate([line.strip() for line in text.splitlines() if line.strip()], start=1):
         parts = [part.strip() for part in line.split("|")]
-
         if len(parts) == 1:
-            name = f"Lead {i}"
-            address = parts[0]
-            blocks = "Any"
-            estimator = "Any"
-            notes = ""
+            name, address, blocks, estimator, notes = f"Lead {i}", parts[0], "Any", "Any", ""
         elif len(parts) == 2:
-            name = parts[0] or f"Lead {i}"
-            address = parts[1]
-            blocks = "Any"
-            estimator = "Any"
-            notes = ""
+            name, address, blocks, estimator, notes = parts[0] or f"Lead {i}", parts[1], "Any", "Any", ""
         else:
             name = parts[0] or f"Lead {i}"
             address = parts[1]
             blocks = parts[2] if len(parts) > 2 and parts[2] else "Any"
             estimator = parts[3] if len(parts) > 3 and parts[3] else "Any"
             notes = parts[4] if len(parts) > 4 and parts[4] else ""
-
         if address:
-            rows.append(
-                {
-                    "Lead Name": name,
-                    "Address": address,
-                    "Available Blocks": block_display(parse_blocks(blocks)),
-                    "Priority": "Normal",
-                    "Required Estimator": normalize_estimator(estimator),
-                    "Notes": notes,
-                }
-            )
-
+            rows.append({
+                "Lead Name": name,
+                "Address": address,
+                "Available Blocks": block_display(parse_blocks(blocks)),
+                "Priority": "Normal",
+                "Required Estimator": normalize_estimator(estimator),
+                "Notes": notes,
+            })
     return pd.DataFrame(rows, columns=LEAD_COLUMNS)
 
 
 def to_leads(df: pd.DataFrame) -> List[Lead]:
     leads = []
-
     for _, row in clean_df(df).iterrows():
         if is_blank(row["Address"]):
             continue
-
         leads.append(
             Lead(
                 name=str(row["Lead Name"]).strip() or "Lead",
@@ -296,18 +507,15 @@ def to_leads(df: pd.DataFrame) -> List[Lead]:
                 notes=str(row.get("Notes", "")).strip(),
             )
         )
-
     return leads
 
 
 def drive_minutes(cache: Dict[Tuple[str, str], int], client, origin: str, destination: str) -> int:
     key = (origin, destination)
-
     if key in cache:
         return cache[key]
 
     minutes = None
-
     if client:
         try:
             result = client.distance_matrix([origin], [destination], mode="driving", units="imperial")
@@ -326,14 +534,12 @@ def drive_minutes(cache: Dict[Tuple[str, str], int], client, origin: str, destin
 
 def estimator_can_take_lead(estimator: Estimator, lead: Lead, block_label: str) -> bool:
     required = normalize_estimator(lead.required_estimator)
-
     if block_label not in estimator.available_blocks:
         return False
     if block_label not in lead.available_blocks:
         return False
     if required != "Any" and required.lower() != estimator.name.lower():
         return False
-
     return True
 
 
@@ -351,9 +557,6 @@ def choose_lead_for_slot(estimator: Estimator, block_index: int, block_label: st
         availability_tightness = len(lead.available_blocks)
         required_bonus = -150 if normalize_estimator(lead.required_estimator) != "Any" else 0
 
-        # Each estimate occupies the full block.
-        # Drive from previous helps route order throughout the day.
-        # Drive to home gets weighted heavier later in the day so final stops trend closer to home when possible.
         score = (
             (-priority_score * 1000)
             + (availability_tightness * 40)
@@ -365,7 +568,6 @@ def choose_lead_for_slot(estimator: Estimator, block_index: int, block_label: st
 
     if not candidates:
         return None
-
     candidates.sort(key=lambda item: item[0])
     _, lead, drive_from_previous, drive_to_home = candidates[0]
     return lead, drive_from_previous, drive_to_home
@@ -397,21 +599,17 @@ def build_routes(estimators: List[Estimator], leads: List[Lead], client):
                 continue
 
             lead, drive_from_previous, drive_to_home = choice
-
-            routes[estimator.name].append(
-                {
-                    "Estimate Block": block_label,
-                    "Estimate Time": estimate_time,
-                    "Lead": lead.name,
-                    "Address": lead.address,
-                    "Priority": lead.priority,
-                    "Required Estimator": lead.required_estimator,
-                    "Drive From Previous (min)": drive_from_previous,
-                    "Drive From Stop To Home (min)": drive_to_home,
-                    "Notes": lead.notes,
-                }
-            )
-
+            routes[estimator.name].append({
+                "Estimate Block": block_label,
+                "Estimate Time": estimate_time,
+                "Lead": lead.name,
+                "Address": lead.address,
+                "Priority": lead.priority,
+                "Required Estimator": lead.required_estimator,
+                "Drive From Previous (min)": drive_from_previous,
+                "Drive From Stop To Home (min)": drive_to_home,
+                "Notes": lead.notes,
+            })
             current_locations[estimator.name] = lead.address
             remaining.remove(lead)
 
@@ -436,67 +634,66 @@ def build_routes(estimators: List[Estimator], leads: List[Lead], client):
 def maps_link(home_address: str, rows: List[dict]) -> str:
     if not rows:
         return ""
-
     stop_addresses = [row["Address"] for row in rows]
     origin = urllib.parse.quote_plus(home_address)
     destination = urllib.parse.quote_plus(home_address)
     waypoints = "|".join(urllib.parse.quote_plus(address) for address in stop_addresses)
 
-    url = (
-        f"https://www.google.com/maps/dir/?api=1"
-        f"&origin={origin}"
-        f"&destination={destination}"
-        f"&travelmode=driving"
-    )
-
+    url = f"https://www.google.com/maps/dir/?api=1&origin={origin}&destination={destination}&travelmode=driving"
     if waypoints:
         url += f"&waypoints={waypoints}"
-
     return url
 
 
 def validate_leads(df: pd.DataFrame, estimator_names: List[str]) -> List[str]:
     errors = []
     estimator_lookup = [name.lower() for name in estimator_names]
-
     for i, row in df.iterrows():
         if is_blank(row["Address"]):
             errors.append(f"Row {i + 1} is missing an address.")
-
         required = normalize_estimator(row["Required Estimator"])
         if required != "Any" and required.lower() not in estimator_lookup:
-            errors.append(
-                f"Row {i + 1} is assigned to {required}, but that estimator is not marked as working today."
-            )
-
+            errors.append(f"Row {i + 1} is assigned to {required}, but that estimator is not marked as working today.")
         if not parse_blocks(row["Available Blocks"]):
             errors.append(f"Row {i + 1} needs at least one available estimate block.")
-
     return errors
 
 
-st.set_page_config(page_title="Estimator Route Planner", page_icon="🌲", layout="wide")
+# -----------------------------
+# App UI
+# -----------------------------
 
-st.title("Estimator Route Planner")
-st.caption("Add leads, choose customer estimate blocks, assign estimators, and build suggested daily routes.")
-st.info("Each estimate is assumed to take the full assigned time block. Estimators start and end from their home location. Drive time is used to choose a better route order and to place later stops closer to home when possible.")
+st.markdown(
+    """
+    <div class="hero-card">
+        <div class="hero-title">🌲 TREE ESTIMATE ROUTE PLANNER</div>
+        <div class="hero-subtitle">Plan efficient daily routes for tree estimate appointments.</div>
+    </div>
+    <div class="notice-card">
+        🍃 <strong>Each estimate takes the full assigned time block.</strong>
+        Estimators start and end from home. Drive time is used for route order and to help end the day close to home.
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 if "leads_df" not in st.session_state:
     st.session_state.leads_df = blank_df()
-
 if "address_suggestions" not in st.session_state:
     st.session_state.address_suggestions = []
 
+sidebar_brand()
 with st.sidebar:
     st.header("Schedule Settings")
     service_date = date_input_mmddyyyy("Service date", dt.date.today())
     st.caption(f"Using date: {format_date(service_date)}")
 
+    st.markdown("---")
     st.markdown("**Estimate blocks**")
     for block in ESTIMATE_BLOCKS:
-        st.write(f"{block['label']}  |  {block_time_text(block)}")
+        st.write(f"🌿 {block['label']}")
 
-    st.divider()
+    st.markdown("---")
     st.header("Google Maps")
     google_api_key = st.text_input("Google Maps API key", type="password")
     country_code = st.text_input("Autocomplete country code", value="us", max_chars=2).lower()
@@ -513,8 +710,7 @@ with st.sidebar:
             except Exception as exc:
                 st.error(f"Could not load Google Maps: {exc}")
 
-st.subheader("1. Who Is Working Today?")
-
+st.markdown("<div class='section-card'><div class='step-title'><span class='step-pill'>1</span>Who Is Working Today?</div>", unsafe_allow_html=True)
 working_estimators = st.multiselect(
     "Select estimators working this date",
     DEFAULT_ESTIMATORS,
@@ -525,26 +721,31 @@ if not working_estimators:
     st.warning("Select at least one estimator before building routes.")
 
 estimators = []
-
 if working_estimators:
     estimator_cols = st.columns(len(working_estimators))
-
     for i, estimator_name in enumerate(working_estimators):
         with estimator_cols[i]:
-            st.markdown(f"**{estimator_name}**")
             home_address = st.text_input(
                 f"{estimator_name} start/end home location",
                 value=DEFAULT_ESTIMATOR_HOMES.get(estimator_name, ""),
                 key=f"home_address_{estimator_name}",
             )
-            st.caption("Start and end location")
             available_blocks = st.multiselect(
                 f"{estimator_name} available blocks",
                 BLOCK_LABELS,
                 default=BLOCK_LABELS,
                 key=f"estimator_blocks_{estimator_name}",
             )
-
+            st.markdown(
+                f"""
+                <div class="estimator-card">
+                    <div class="estimator-name">🏡 {estimator_name}</div>
+                    <div class="home-line">{home_address}</div>
+                    <div>{chips_html(available_blocks or BLOCK_LABELS)}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
             estimators.append(
                 Estimator(
                     name=estimator_name,
@@ -552,27 +753,24 @@ if working_estimators:
                     available_blocks=available_blocks or BLOCK_LABELS.copy(),
                 )
             )
+st.markdown("</div>", unsafe_allow_html=True)
 
 estimator_names = [estimator.name for estimator in estimators]
 estimator_options = ["Any"] + estimator_names
 
-st.subheader("2. Add Lead")
-
+st.markdown("<div class='section-card'><div class='step-title'><span class='step-pill'>2</span>Add Lead</div>", unsafe_allow_html=True)
 if not gmaps_client:
     st.info("Add a Google Maps API key later for live address suggestions. Manual address entry still works.")
 
 lookup_col, button_col = st.columns([4, 1])
-
 with lookup_col:
     address_query = st.text_input("Start typing customer address", placeholder="Example: 123 Main St Chattanooga")
-
 with button_col:
     st.write("")
     st.write("")
     if st.button("Search", use_container_width=True):
         suggestions, error = google_address_predictions(gmaps_client, address_query, country_code)
         st.session_state.address_suggestions = suggestions
-
         if error:
             st.warning(error)
         elif not suggestions:
@@ -584,11 +782,9 @@ else:
     selected_address = st.text_input("Manual address", value=address_query or "")
 
 lead_col_1, lead_col_2, lead_col_3 = st.columns([2, 2, 1])
-
 with lead_col_1:
     new_name = st.text_input("Customer name", placeholder="John Smith")
     new_notes = st.text_input("Notes", placeholder="Gate code, call before arrival, tree concern, etc.")
-
 with lead_col_2:
     new_blocks = st.multiselect(
         "Customer available estimate blocks",
@@ -596,12 +792,11 @@ with lead_col_2:
         default=BLOCK_LABELS,
         help="Choose every full block the customer could take.",
     )
-
 with lead_col_3:
     new_priority = st.selectbox("Priority", ["Emergency", "High", "Normal", "Low"], index=2)
     new_estimator = st.selectbox("Required estimator", estimator_options, index=0)
 
-if st.button("Add Lead to Route List", type="primary"):
+if st.button("➕ Add Lead to Route List", type="primary"):
     if is_blank(selected_address):
         st.error("Add or select an address before adding the lead.")
     elif not new_blocks:
@@ -614,14 +809,9 @@ if st.button("Add Lead to Route List", type="primary"):
 
 with st.expander("Optional: bulk paste leads"):
     st.caption("Format: Customer | Address | Available Blocks | Required Estimator | Notes")
-    st.code(
-        "John Smith | 123 Main St, Chattanooga, TN | 8:15-9:30, 1:00-2:30 | Any | Call before arrival",
-        language="text",
-    )
+    st.code("John Smith | 123 Main St, Chattanooga, TN | 8:15-9:30, 1:00-2:30 | Any | Call before arrival", language="text")
     bulk_text = st.text_area("Paste leads", height=120)
-
     bulk_col_1, bulk_col_2 = st.columns(2)
-
     with bulk_col_1:
         if st.button("Add Pasted Leads", use_container_width=True):
             parsed = parse_bulk(bulk_text)
@@ -630,16 +820,14 @@ with st.expander("Optional: bulk paste leads"):
                 st.success(f"Added {len(parsed)} lead(s).")
             else:
                 st.warning("Paste at least one lead first.")
-
     with bulk_col_2:
         if st.button("Clear All Leads", use_container_width=True):
             st.session_state.leads_df = blank_df()
             st.success("Lead table cleared.")
+st.markdown("</div>", unsafe_allow_html=True)
 
-st.subheader("3. Review Leads")
-
+st.markdown("<div class='section-card'><div class='step-title'><span class='step-pill'>3</span>Review Leads / Estimates</div>", unsafe_allow_html=True)
 current_df = clean_df(st.session_state.leads_df)
-
 column_config = {
     "Available Blocks": st.column_config.TextColumn(
         "Available Blocks",
@@ -657,80 +845,78 @@ column_config = {
         required=True,
     ),
 }
-
 edited_df = st.data_editor(current_df, num_rows="dynamic", use_container_width=True, column_config=column_config, key="lead_editor")
 st.session_state.leads_df = clean_df(edited_df)
+st.markdown("</div>", unsafe_allow_html=True)
 
-st.subheader("4. Generate Routes")
-
+st.markdown("<div class='section-card'><div class='step-title'><span class='step-pill'>4</span>Route Plan</div>", unsafe_allow_html=True)
 errors = []
 if not estimator_names:
     errors.append("Select at least one working estimator.")
 errors.extend(validate_leads(st.session_state.leads_df, estimator_names))
-
 for error in errors:
     st.error(error)
 
-if st.button("Build Today's Routes", type="primary", use_container_width=True):
+if st.button("🔄 Build / Optimize Routes", type="primary", use_container_width=True):
     if errors:
         st.stop()
-
     leads = to_leads(st.session_state.leads_df)
-
     if not leads:
         st.error("Add at least one lead first.")
         st.stop()
 
     routes, unassigned, route_summaries = build_routes(estimators, leads, gmaps_client)
     scheduled_count = sum(len(rows) for rows in routes.values())
-
     st.success(f"Scheduled {scheduled_count} of {len(leads)} lead(s) for {format_date(service_date)}.")
 
     export_rows = []
+    route_cols = st.columns(max(1, len(estimators)))
 
-    for estimator in estimators:
+    for idx, estimator in enumerate(estimators):
         rows = routes.get(estimator.name, [])
         summary = route_summaries.get(estimator.name, {})
-        st.markdown(f"### {estimator.name}")
-        st.caption(f"Start/End home: {summary.get('home_address', estimator.home_address)}")
+        with route_cols[idx]:
+            st.markdown("<div class='route-card'>", unsafe_allow_html=True)
+            st.markdown(f"### 🌲 {estimator.name}")
+            st.caption(f"Start/End home: {summary.get('home_address', estimator.home_address)}")
 
-        if not rows:
-            st.info("No leads scheduled for this estimator.")
-            continue
+            if not rows:
+                st.info("No leads scheduled for this estimator.")
+            else:
+                final_drive = summary.get("final_drive_home", 0)
+                st.markdown(
+                    f"<div class='metric-strip'><span class='metric-pill'>Stops: {len(rows)}</span><span class='metric-pill'>Drive home: {final_drive} min</span></div>",
+                    unsafe_allow_html=True,
+                )
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-        final_drive = summary.get("final_drive_home", 0)
-        st.info(f"Estimated drive from final stop back home: {final_drive} min")
+                link = maps_link(estimator.home_address, rows)
+                if link:
+                    st.markdown(f"[Open {estimator.name}'s full route from home back to home]({link})")
 
-        route_df = pd.DataFrame(rows)
-        st.dataframe(route_df, use_container_width=True, hide_index=True)
+                copyable = "\n".join([f"{row['Estimate Block']} - {row['Lead']} - {row['Address']}" for row in rows])
+                copyable = f"Start at home: {estimator.home_address}\n" + copyable + f"\nEnd at home: {estimator.home_address}"
+                st.text_area(
+                    f"Copyable schedule for {estimator.name}",
+                    value=copyable,
+                    height=150,
+                    key=f"schedule_{estimator.name}",
+                )
 
-        link = maps_link(estimator.home_address, rows)
-        if link:
-            st.markdown(f"[Open {estimator.name}'s full route from home back to home]({link})")
-
-        copyable = "\n".join([f"{row['Estimate Block']} - {row['Lead']} - {row['Address']}" for row in rows])
-        copyable = f"Start at home: {estimator.home_address}\n" + copyable + f"\nEnd at home: {estimator.home_address}"
-
-        st.text_area(
-            f"Copyable schedule for {estimator.name}",
-            value=copyable,
-            height=150,
-            key=f"schedule_{estimator.name}",
-        )
-
-        export_rows.extend(
-            [
-                {
-                    "Date": format_date(service_date),
-                    "Estimator": estimator.name,
-                    "Start Location": estimator.home_address,
-                    "End Location": estimator.home_address,
-                    "Final Drive Home (min)": final_drive,
-                    **row,
-                }
-                for row in rows
-            ]
-        )
+                export_rows.extend(
+                    [
+                        {
+                            "Date": format_date(service_date),
+                            "Estimator": estimator.name,
+                            "Start Location": estimator.home_address,
+                            "End Location": estimator.home_address,
+                            "Final Drive Home (min)": final_drive,
+                            **row,
+                        }
+                        for row in rows
+                    ]
+                )
+            st.markdown("</div>", unsafe_allow_html=True)
 
     if unassigned:
         st.markdown("### Unscheduled Leads")
@@ -755,8 +941,11 @@ if st.button("Build Today's Routes", type="primary", use_container_width=True):
     if export_rows:
         export_df = pd.DataFrame(export_rows)
         st.download_button(
-            "Download route schedule CSV",
+            "⬇ Export Routes",
             data=export_df.to_csv(index=False).encode("utf-8"),
             file_name=f"estimator_routes_{format_date_for_file(service_date)}.csv",
             mime="text/csv",
         )
+
+st.markdown("</div>", unsafe_allow_html=True)
+st.markdown("<div class='footer-tree'>🍃 Care for trees. Care for tomorrow. 🌳</div>", unsafe_allow_html=True)
