@@ -25,7 +25,6 @@ ESTIMATE_BLOCKS = [
 ]
 
 BLOCK_LABELS = [block["label"] for block in ESTIMATE_BLOCKS]
-BLOCK_LOOKUP = {block["label"]: block for block in ESTIMATE_BLOCKS}
 
 LEAD_COLUMNS = [
     "Lead Name",
@@ -59,6 +58,29 @@ class Lead:
     priority: str
     required_estimator: str
     notes: str = ""
+
+
+def format_date(date_value: dt.date) -> str:
+    return date_value.strftime("%m/%d/%Y")
+
+
+def format_date_for_file(date_value: dt.date) -> str:
+    return date_value.strftime("%m-%d-%Y")
+
+
+def date_input_mmddyyyy(label: str, value: dt.date) -> dt.date:
+    try:
+        return st.date_input(label, value=value, format="MM/DD/YYYY")
+    except TypeError:
+        selected = st.date_input(label, value=value)
+        st.caption(f"Selected date: {format_date(selected)}")
+        return selected
+
+
+def block_time_text(block: dict) -> str:
+    start = block["start"].strftime("%I:%M %p").lstrip("0")
+    end = block["end"].strftime("%I:%M %p").lstrip("0")
+    return f"{start} - {end}"
 
 
 def is_blank(value) -> bool:
@@ -131,13 +153,11 @@ def parse_blocks(value) -> List[str]:
             chosen.append(alias_map[simplified])
             continue
 
-        # Allow users to type a contained start time like "9:30".
         for label in BLOCK_LABELS:
             if simplified == simplify_block_text(label.split("-")[0]):
                 chosen.append(label)
                 break
 
-    # Remove duplicates while preserving order.
     deduped = []
     for label in chosen:
         if label not in deduped:
@@ -188,14 +208,7 @@ def google_address_predictions(client, query: str, country_code: str = "us") -> 
         return [], f"Google address lookup failed: {exc}"
 
 
-def add_lead(
-    name: str,
-    address: str,
-    available_blocks: List[str],
-    priority: str,
-    required_estimator: str,
-    notes: str,
-) -> None:
+def add_lead(name: str, address: str, available_blocks: List[str], priority: str, required_estimator: str, notes: str) -> None:
     new_row = pd.DataFrame(
         [
             {
@@ -291,7 +304,6 @@ def drive_minutes(cache: Dict[Tuple[str, str], int], client, origin: str, destin
             minutes = None
 
     if minutes is None:
-        # Rough fallback so the app still works before the Google API key is added.
         minutes = 12 + (sum(ord(ch) for ch in f"{origin}|{destination}".lower()) % 26)
 
     cache[key] = minutes
@@ -303,24 +315,15 @@ def estimator_can_take_lead(estimator: Estimator, lead: Lead, block_label: str) 
 
     if block_label not in estimator.available_blocks:
         return False
-
     if block_label not in lead.available_blocks:
         return False
-
     if required != "Any" and required.lower() != estimator.name.lower():
         return False
 
     return True
 
 
-def choose_lead_for_slot(
-    estimator: Estimator,
-    block_label: str,
-    current_location: str,
-    remaining: List[Lead],
-    cache,
-    client,
-):
+def choose_lead_for_slot(estimator: Estimator, block_label: str, current_location: str, remaining: List[Lead], cache, client):
     candidates = []
 
     for lead in remaining:
@@ -329,13 +332,11 @@ def choose_lead_for_slot(
 
         drive = drive_minutes(cache, client, current_location, lead.address)
         priority_score = PRIORITY_SCORE.get(lead.priority, 3)
-
-        # Lower is better.
-        # High priority wins first, then tighter customer availability, then shorter drive.
         availability_tightness = len(lead.available_blocks)
         required_bonus = -150 if normalize_estimator(lead.required_estimator) != "Any" else 0
-        score = (-priority_score * 1000) + (availability_tightness * 40) + (drive * 5) + required_bonus
 
+        # Each estimate occupies the full block. Drive time is used only to rank the best route order.
+        score = (-priority_score * 1000) + (availability_tightness * 40) + (drive * 5) + required_bonus
         candidates.append((score, lead, drive))
 
     if not candidates:
@@ -354,7 +355,7 @@ def build_routes(estimators: List[Estimator], leads: List[Lead], client):
 
     for block in ESTIMATE_BLOCKS:
         block_label = block["label"]
-        window = f"{block['start'].strftime('%I:%M %p')} - {block['end'].strftime('%I:%M %p')}"
+        estimate_time = block_time_text(block)
 
         for estimator in estimators:
             choice = choose_lead_for_slot(
@@ -373,13 +374,13 @@ def build_routes(estimators: List[Estimator], leads: List[Lead], client):
 
             routes[estimator.name].append(
                 {
-                    "Block": block_label,
-                    "Window": window,
+                    "Estimate Block": block_label,
+                    "Estimate Time": estimate_time,
                     "Lead": lead.name,
                     "Address": lead.address,
                     "Priority": lead.priority,
                     "Required Estimator": lead.required_estimator,
-                    "Drive Minutes": drive,
+                    "Drive From Previous (min)": drive,
                     "Notes": lead.notes,
                 }
             )
@@ -430,14 +431,11 @@ def validate_leads(df: pd.DataFrame, estimator_names: List[str]) -> List[str]:
     return errors
 
 
-# -----------------------------
-# Streamlit UI
-# -----------------------------
-
 st.set_page_config(page_title="Estimator Route Planner", page_icon="🌲", layout="wide")
 
 st.title("Estimator Route Planner")
 st.caption("Add leads, choose customer estimate blocks, assign estimators, and build suggested daily routes.")
+st.info("Each estimate is assumed to take the full assigned time block. Drive time is used to choose a better route order, not to shorten or move the block.")
 
 if "leads_df" not in st.session_state:
     st.session_state.leads_df = blank_df()
@@ -447,11 +445,12 @@ if "address_suggestions" not in st.session_state:
 
 with st.sidebar:
     st.header("Schedule Settings")
-    service_date = st.date_input("Service date", value=dt.date.today())
+    service_date = date_input_mmddyyyy("Service date", dt.date.today())
+    st.caption(f"Using date: {format_date(service_date)}")
 
     st.markdown("**Estimate blocks**")
     for block in ESTIMATE_BLOCKS:
-        st.write(f"{block['label']}")
+        st.write(f"{block['label']}  |  {block_time_text(block)}")
 
     st.divider()
     st.header("Google Maps")
@@ -472,9 +471,7 @@ with st.sidebar:
 
 st.subheader("1. Estimators and Availability")
 
-estimator_count = int(
-    st.number_input("How many estimators are scheduling today?", min_value=1, max_value=10, value=2, step=1)
-)
+estimator_count = int(st.number_input("How many estimators are scheduling today?", min_value=1, max_value=10, value=2, step=1))
 
 estimator_cols = st.columns(estimator_count)
 estimators = []
@@ -483,11 +480,7 @@ for i in range(estimator_count):
     with estimator_cols[i]:
         st.markdown(f"**Estimator {i + 1}**")
         name = st.text_input(f"Name {i + 1}", value=f"Estimator {i + 1}", key=f"name_{i}")
-        start_address = st.text_input(
-            f"Start location {i + 1}",
-            value="Chattanooga, TN",
-            key=f"start_address_{i}",
-        )
+        start_address = st.text_input(f"Start location {i + 1}", value="Chattanooga, TN", key=f"start_address_{i}")
         available_blocks = st.multiselect(
             f"Available blocks {i + 1}",
             BLOCK_LABELS,
@@ -544,7 +537,7 @@ with lead_col_2:
         "Customer available estimate blocks",
         BLOCK_LABELS,
         default=BLOCK_LABELS,
-        help="Choose every block the customer could take.",
+        help="Choose every full block the customer could take.",
     )
 
 with lead_col_3:
@@ -574,9 +567,7 @@ with st.expander("Optional: bulk paste leads"):
         if st.button("Add Pasted Leads", use_container_width=True):
             parsed = parse_bulk(bulk_text)
             if len(parsed):
-                st.session_state.leads_df = clean_df(
-                    pd.concat([st.session_state.leads_df, parsed], ignore_index=True)
-                )
+                st.session_state.leads_df = clean_df(pd.concat([st.session_state.leads_df, parsed], ignore_index=True))
                 st.success(f"Added {len(parsed)} lead(s).")
             else:
                 st.warning("Paste at least one lead first.")
@@ -608,14 +599,7 @@ column_config = {
     ),
 }
 
-edited_df = st.data_editor(
-    current_df,
-    num_rows="dynamic",
-    use_container_width=True,
-    column_config=column_config,
-    key="lead_editor",
-)
-
+edited_df = st.data_editor(current_df, num_rows="dynamic", use_container_width=True, column_config=column_config, key="lead_editor")
 st.session_state.leads_df = clean_df(edited_df)
 
 st.subheader("4. Generate Routes")
@@ -638,7 +622,7 @@ if st.button("Build Today's Routes", type="primary", use_container_width=True):
     routes, unassigned = build_routes(estimators, leads, gmaps_client)
     scheduled_count = sum(len(rows) for rows in routes.values())
 
-    st.success(f"Scheduled {scheduled_count} of {len(leads)} lead(s) for {service_date}.")
+    st.success(f"Scheduled {scheduled_count} of {len(leads)} lead(s) for {format_date(service_date)}.")
 
     export_rows = []
 
@@ -657,9 +641,7 @@ if st.button("Build Today's Routes", type="primary", use_container_width=True):
         if link:
             st.markdown(f"[Open {estimator.name}'s route in Google Maps]({link})")
 
-        copyable = "\n".join(
-            [f"{row['Block']} - {row['Lead']} - {row['Address']}" for row in rows]
-        )
+        copyable = "\n".join([f"{row['Estimate Block']} - {row['Lead']} - {row['Address']}" for row in rows])
 
         st.text_area(
             f"Copyable schedule for {estimator.name}",
@@ -668,7 +650,7 @@ if st.button("Build Today's Routes", type="primary", use_container_width=True):
             key=f"schedule_{estimator.name}",
         )
 
-        export_rows.extend([{"Estimator": estimator.name, **row} for row in rows])
+        export_rows.extend([{"Date": format_date(service_date), "Estimator": estimator.name, **row} for row in rows])
 
     if unassigned:
         st.markdown("### Unscheduled Leads")
@@ -695,6 +677,6 @@ if st.button("Build Today's Routes", type="primary", use_container_width=True):
         st.download_button(
             "Download route schedule CSV",
             data=export_df.to_csv(index=False).encode("utf-8"),
-            file_name=f"estimator_routes_{service_date}.csv",
+            file_name=f"estimator_routes_{format_date_for_file(service_date)}.csv",
             mime="text/csv",
         )
