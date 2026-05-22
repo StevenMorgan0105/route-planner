@@ -36,7 +36,6 @@ HOME_PULL_BY_BLOCK_INDEX = [0.0, 0.2, 0.5, 1.25, 2.5, 4.0]
 PRIORITY_SCORE = {"Emergency": 5, "High": 4, "Normal": 3, "Low": 2}
 LEAD_COLUMNS = ["Lead Name", "Address", "Available Blocks", "Priority", "Required Estimator", "Notes"]
 
-# Chattanooga hard-coded local autocomplete area.
 LOCAL_SEARCH_CENTER = "Chattanooga, TN"
 LOCAL_SEARCH_LAT_LNG = (35.0456, -85.3097)
 LOCAL_SEARCH_RADIUS_MILES = 75
@@ -86,6 +85,15 @@ def fmt_date(d: dt.date) -> str:
 
 def file_date(d: dt.date) -> str:
     return d.strftime("%m-%d-%Y")
+
+
+def date_input_mmddyyyy(label: str, value: dt.date) -> dt.date:
+    try:
+        return st.date_input(label, value=value, format="MM/DD/YYYY")
+    except TypeError:
+        selected = st.date_input(label, value=value)
+        st.caption(f"Selected date: {fmt_date(selected)}")
+        return selected
 
 
 def block_time(block: dict) -> str:
@@ -289,7 +297,6 @@ def validate(df: pd.DataFrame, estimator_names: List[str]) -> List[str]:
     return errors
 
 
-# UI
 st.markdown("""
 <div class="hero-card"><div class="hero-title">🌲 TREE ESTIMATE ROUTE PLANNER</div><div>Plan efficient daily routes for tree estimate appointments.</div></div>
 <div class="notice-card">🍃 <strong>Each estimate takes the full assigned time block.</strong> Address autocomplete is restricted to the local Chattanooga service area.</div>
