@@ -25,6 +25,7 @@ ESTIMATE_BLOCKS = [
 ]
 
 BLOCK_LABELS = [block["label"] for block in ESTIMATE_BLOCKS]
+DEFAULT_ESTIMATORS = ["Jon", "Jut", "Lindsay"]
 
 LEAD_COLUMNS = [
     "Lead Name",
@@ -423,7 +424,9 @@ def validate_leads(df: pd.DataFrame, estimator_names: List[str]) -> List[str]:
 
         required = normalize_estimator(row["Required Estimator"])
         if required != "Any" and required.lower() not in estimator_lookup:
-            errors.append(f"Row {i + 1} is assigned to an estimator that does not exist.")
+            errors.append(
+                f"Row {i + 1} is assigned to {required}, but that estimator is not marked as working today."
+            )
 
         if not parse_blocks(row["Available Blocks"]):
             errors.append(f"Row {i + 1} needs at least one available estimate block.")
@@ -469,32 +472,46 @@ with st.sidebar:
             except Exception as exc:
                 st.error(f"Could not load Google Maps: {exc}")
 
-st.subheader("1. Estimators and Availability")
+st.subheader("1. Who Is Working Today?")
 
-estimator_count = int(st.number_input("How many estimators are scheduling today?", min_value=1, max_value=10, value=2, step=1))
+working_estimators = st.multiselect(
+    "Select estimators working this date",
+    DEFAULT_ESTIMATORS,
+    default=DEFAULT_ESTIMATORS,
+)
 
-estimator_cols = st.columns(estimator_count)
+if not working_estimators:
+    st.warning("Select at least one estimator before building routes.")
+
+default_start_location = st.text_input("Default start location", value="Chattanooga, TN")
+
 estimators = []
 
-for i in range(estimator_count):
-    with estimator_cols[i]:
-        st.markdown(f"**Estimator {i + 1}**")
-        name = st.text_input(f"Name {i + 1}", value=f"Estimator {i + 1}", key=f"name_{i}")
-        start_address = st.text_input(f"Start location {i + 1}", value="Chattanooga, TN", key=f"start_address_{i}")
-        available_blocks = st.multiselect(
-            f"Available blocks {i + 1}",
-            BLOCK_LABELS,
-            default=BLOCK_LABELS,
-            key=f"estimator_blocks_{i}",
-        )
+if working_estimators:
+    estimator_cols = st.columns(len(working_estimators))
 
-        estimators.append(
-            Estimator(
-                name=name.strip() or f"Estimator {i + 1}",
-                start_address=start_address.strip() or "Chattanooga, TN",
-                available_blocks=available_blocks or BLOCK_LABELS.copy(),
+    for i, estimator_name in enumerate(working_estimators):
+        with estimator_cols[i]:
+            st.markdown(f"**{estimator_name}**")
+            start_address = st.text_input(
+                f"{estimator_name} start location",
+                value=default_start_location,
+                key=f"start_address_{estimator_name}",
             )
-        )
+            available_blocks = st.multiselect(
+                f"{estimator_name} available blocks",
+                BLOCK_LABELS,
+                default=BLOCK_LABELS,
+                key=f"estimator_blocks_{estimator_name}",
+            )
+
+            estimators.append(
+                Estimator(
+                    name=estimator_name,
+                    start_address=start_address.strip() or default_start_location,
+                    available_blocks=available_blocks or BLOCK_LABELS.copy(),
+                )
+            )
 
 estimator_names = [estimator.name for estimator in estimators]
 estimator_options = ["Any"] + estimator_names
@@ -549,6 +566,8 @@ if st.button("Add Lead to Route List", type="primary"):
         st.error("Add or select an address before adding the lead.")
     elif not new_blocks:
         st.error("Choose at least one customer availability block.")
+    elif not estimator_names:
+        st.error("Select at least one working estimator before adding leads.")
     else:
         add_lead(new_name, selected_address, new_blocks, new_priority, new_estimator, new_notes)
         st.success("Lead added.")
@@ -604,7 +623,10 @@ st.session_state.leads_df = clean_df(edited_df)
 
 st.subheader("4. Generate Routes")
 
-errors = validate_leads(st.session_state.leads_df, estimator_names)
+errors = []
+if not estimator_names:
+    errors.append("Select at least one working estimator.")
+errors.extend(validate_leads(st.session_state.leads_df, estimator_names))
 
 for error in errors:
     st.error(error)
