@@ -26,6 +26,15 @@ ESTIMATE_BLOCKS = [
 
 BLOCK_LABELS = [block["label"] for block in ESTIMATE_BLOCKS]
 DEFAULT_ESTIMATORS = ["Jon", "Jut", "Lindsay"]
+DEFAULT_ESTIMATOR_HOMES = {
+    "Jon": "Tellico Plains, TN",
+    "Jut": "Red Bank, TN",
+    "Lindsay": "Chickamauga, GA",
+}
+
+# This gets stronger as the day gets later.
+# It helps the last assignments land closer to the estimator's home when possible.
+HOME_PULL_BY_BLOCK_INDEX = [0.0, 0.2, 0.5, 1.25, 2.5, 4.0]
 
 LEAD_COLUMNS = [
     "Lead Name",
@@ -48,6 +57,7 @@ PRIORITY_SCORE = {
 class Estimator:
     name: str
     start_address: str
+    home_address: str
     available_blocks: List[str]
 
 
@@ -324,43 +334,55 @@ def estimator_can_take_lead(estimator: Estimator, lead: Lead, block_label: str) 
     return True
 
 
-def choose_lead_for_slot(estimator: Estimator, block_label: str, current_location: str, remaining: List[Lead], cache, client):
+def choose_lead_for_slot(estimator: Estimator, block_index: int, block_label: str, current_location: str, remaining: List[Lead], cache, client):
     candidates = []
+    home_pull = HOME_PULL_BY_BLOCK_INDEX[min(block_index, len(HOME_PULL_BY_BLOCK_INDEX) - 1)]
 
     for lead in remaining:
         if not estimator_can_take_lead(estimator, lead, block_label):
             continue
 
-        drive = drive_minutes(cache, client, current_location, lead.address)
+        drive_from_previous = drive_minutes(cache, client, current_location, lead.address)
+        drive_to_home = drive_minutes(cache, client, lead.address, estimator.home_address) if estimator.home_address else 0
         priority_score = PRIORITY_SCORE.get(lead.priority, 3)
         availability_tightness = len(lead.available_blocks)
         required_bonus = -150 if normalize_estimator(lead.required_estimator) != "Any" else 0
 
-        # Each estimate occupies the full block. Drive time is used only to rank the best route order.
-        score = (-priority_score * 1000) + (availability_tightness * 40) + (drive * 5) + required_bonus
-        candidates.append((score, lead, drive))
+        # Each estimate occupies the full block.
+        # Drive from previous helps route order throughout the day.
+        # Drive to home gets weighted heavier later in the day so final stops trend closer to home when possible.
+        score = (
+            (-priority_score * 1000)
+            + (availability_tightness * 40)
+            + (drive_from_previous * 5)
+            + (drive_to_home * home_pull)
+            + required_bonus
+        )
+        candidates.append((score, lead, drive_from_previous, drive_to_home))
 
     if not candidates:
         return None
 
     candidates.sort(key=lambda item: item[0])
-    _, lead, drive = candidates[0]
-    return lead, drive
+    _, lead, drive_from_previous, drive_to_home = candidates[0]
+    return lead, drive_from_previous, drive_to_home
 
 
 def build_routes(estimators: List[Estimator], leads: List[Lead], client):
     remaining = leads.copy()
     routes = {estimator.name: [] for estimator in estimators}
+    route_summaries = {}
     current_locations = {estimator.name: estimator.start_address for estimator in estimators}
     cache = {}
 
-    for block in ESTIMATE_BLOCKS:
+    for block_index, block in enumerate(ESTIMATE_BLOCKS):
         block_label = block["label"]
         estimate_time = block_time_text(block)
 
         for estimator in estimators:
             choice = choose_lead_for_slot(
                 estimator=estimator,
+                block_index=block_index,
                 block_label=block_label,
                 current_location=current_locations[estimator.name],
                 remaining=remaining,
@@ -371,7 +393,7 @@ def build_routes(estimators: List[Estimator], leads: List[Lead], client):
             if not choice:
                 continue
 
-            lead, drive = choice
+            lead, drive_from_previous, drive_to_home = choice
 
             routes[estimator.name].append(
                 {
@@ -381,7 +403,8 @@ def build_routes(estimators: List[Estimator], leads: List[Lead], client):
                     "Address": lead.address,
                     "Priority": lead.priority,
                     "Required Estimator": lead.required_estimator,
-                    "Drive From Previous (min)": drive,
+                    "Drive From Previous (min)": drive_from_previous,
+                    "Drive From Stop To Home (min)": drive_to_home,
                     "Notes": lead.notes,
                 }
             )
@@ -389,17 +412,41 @@ def build_routes(estimators: List[Estimator], leads: List[Lead], client):
             current_locations[estimator.name] = lead.address
             remaining.remove(lead)
 
-    return routes, remaining
+    for estimator in estimators:
+        rows = routes.get(estimator.name, [])
+        if rows:
+            last_stop = rows[-1]["Address"]
+            final_drive_home = drive_minutes(cache, client, last_stop, estimator.home_address) if estimator.home_address else 0
+        else:
+            last_stop = ""
+            final_drive_home = 0
+
+        route_summaries[estimator.name] = {
+            "home_address": estimator.home_address,
+            "last_stop": last_stop,
+            "final_drive_home": final_drive_home,
+        }
+
+    return routes, unassigned_with_home_reason(remaining), route_summaries
 
 
-def maps_link(start_address: str, rows: List[dict]) -> str:
+def unassigned_with_home_reason(remaining: List[Lead]) -> List[Lead]:
+    return remaining
+
+
+def maps_link(start_address: str, rows: List[dict], end_address: Optional[str] = None) -> str:
     if not rows:
         return ""
 
-    addresses = [row["Address"] for row in rows]
+    stop_addresses = [row["Address"] for row in rows]
     origin = urllib.parse.quote_plus(start_address)
-    destination = urllib.parse.quote_plus(addresses[-1])
-    waypoints = "|".join(urllib.parse.quote_plus(address) for address in addresses[:-1])
+
+    if end_address:
+        destination = urllib.parse.quote_plus(end_address)
+        waypoints = "|".join(urllib.parse.quote_plus(address) for address in stop_addresses)
+    else:
+        destination = urllib.parse.quote_plus(stop_addresses[-1])
+        waypoints = "|".join(urllib.parse.quote_plus(address) for address in stop_addresses[:-1])
 
     url = (
         f"https://www.google.com/maps/dir/?api=1"
@@ -438,7 +485,7 @@ st.set_page_config(page_title="Estimator Route Planner", page_icon="🌲", layou
 
 st.title("Estimator Route Planner")
 st.caption("Add leads, choose customer estimate blocks, assign estimators, and build suggested daily routes.")
-st.info("Each estimate is assumed to take the full assigned time block. Drive time is used to choose a better route order, not to shorten or move the block.")
+st.info("Each estimate is assumed to take the full assigned time block. Drive time is used to choose a better route order, not to shorten or move the block. The app also tries to place later stops closer to each estimator's home when possible.")
 
 if "leads_df" not in st.session_state:
     st.session_state.leads_df = blank_df()
@@ -498,6 +545,11 @@ if working_estimators:
                 value=default_start_location,
                 key=f"start_address_{estimator_name}",
             )
+            home_address = st.text_input(
+                f"{estimator_name} home location",
+                value=DEFAULT_ESTIMATOR_HOMES.get(estimator_name, ""),
+                key=f"home_address_{estimator_name}",
+            )
             available_blocks = st.multiselect(
                 f"{estimator_name} available blocks",
                 BLOCK_LABELS,
@@ -509,6 +561,7 @@ if working_estimators:
                 Estimator(
                     name=estimator_name,
                     start_address=start_address.strip() or default_start_location,
+                    home_address=home_address.strip() or DEFAULT_ESTIMATOR_HOMES.get(estimator_name, ""),
                     available_blocks=available_blocks or BLOCK_LABELS.copy(),
                 )
             )
@@ -641,7 +694,7 @@ if st.button("Build Today's Routes", type="primary", use_container_width=True):
         st.error("Add at least one lead first.")
         st.stop()
 
-    routes, unassigned = build_routes(estimators, leads, gmaps_client)
+    routes, unassigned, route_summaries = build_routes(estimators, leads, gmaps_client)
     scheduled_count = sum(len(rows) for rows in routes.values())
 
     st.success(f"Scheduled {scheduled_count} of {len(leads)} lead(s) for {format_date(service_date)}.")
@@ -650,29 +703,46 @@ if st.button("Build Today's Routes", type="primary", use_container_width=True):
 
     for estimator in estimators:
         rows = routes.get(estimator.name, [])
+        summary = route_summaries.get(estimator.name, {})
         st.markdown(f"### {estimator.name}")
+        st.caption(f"Home: {summary.get('home_address', estimator.home_address)}")
 
         if not rows:
             st.info("No leads scheduled for this estimator.")
             continue
 
+        final_drive = summary.get("final_drive_home", 0)
+        st.info(f"Estimated drive from final stop to home: {final_drive} min")
+
         route_df = pd.DataFrame(rows)
         st.dataframe(route_df, use_container_width=True, hide_index=True)
 
-        link = maps_link(estimator.start_address, rows)
+        link = maps_link(estimator.start_address, rows, estimator.home_address)
         if link:
-            st.markdown(f"[Open {estimator.name}'s route in Google Maps]({link})")
+            st.markdown(f"[Open {estimator.name}'s route in Google Maps ending near home]({link})")
 
         copyable = "\n".join([f"{row['Estimate Block']} - {row['Lead']} - {row['Address']}" for row in rows])
+        copyable += f"\nEnd near home: {estimator.home_address}"
 
         st.text_area(
             f"Copyable schedule for {estimator.name}",
             value=copyable,
-            height=120,
+            height=140,
             key=f"schedule_{estimator.name}",
         )
 
-        export_rows.extend([{"Date": format_date(service_date), "Estimator": estimator.name, **row} for row in rows])
+        export_rows.extend(
+            [
+                {
+                    "Date": format_date(service_date),
+                    "Estimator": estimator.name,
+                    "Estimator Home": estimator.home_address,
+                    "Final Drive Home (min)": final_drive,
+                    **row,
+                }
+                for row in rows
+            ]
+        )
 
     if unassigned:
         st.markdown("### Unscheduled Leads")
@@ -685,7 +755,7 @@ if st.button("Build Today's Routes", type="primary", use_container_width=True):
                         "Available Blocks": block_display(lead.available_blocks),
                         "Priority": lead.priority,
                         "Required Estimator": lead.required_estimator,
-                        "Reason": "Could not fit within estimator availability, customer availability, or required estimator rule.",
+                        "Reason": "Could not fit within estimator availability, customer availability, required estimator rule, or route/home preference.",
                     }
                     for lead in unassigned
                 ]
