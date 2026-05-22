@@ -42,6 +42,8 @@ DEFAULT_ESTIMATOR_BLOCKS = {
     "Jut": BLOCK_LABELS,
     "Lindsay": BLOCK_LABELS[1:-1],
 }
+DEFAULT_ADDRESS_SEARCH_CENTER = "Chattanooga, TN"
+DEFAULT_ADDRESS_SEARCH_RADIUS_MILES = 45
 HOME_PULL_BY_BLOCK_INDEX = [0.0, 0.2, 0.5, 1.25, 2.5, 4.0]
 LEAD_COLUMNS = ["Lead Name", "Address", "Available Blocks", "Priority", "Required Estimator", "Notes"]
 PRIORITY_SCORE = {"Emergency": 5, "High": 4, "Normal": 3, "Low": 2}
@@ -422,8 +424,9 @@ with st.sidebar:
     else:
         google_api_key = st.text_input("Google Maps API key", type="password")
     country_code = st.text_input("Autocomplete country code", value="us", max_chars=2).lower()
-    address_search_center = st.text_input("Address search center", value="Chattanooga, TN")
-    address_search_radius_miles = st.number_input("Address search radius", min_value=5, max_value=150, value=45, step=5, help="Used to show nearby/local Google address suggestions first.")
+    address_search_center = DEFAULT_ADDRESS_SEARCH_CENTER
+    address_search_radius_miles = DEFAULT_ADDRESS_SEARCH_RADIUS_MILES
+    st.caption(f"Address suggestions are automatically biased near {address_search_center} within about {address_search_radius_miles} miles.")
     st.caption("Places API powers address lookup. Distance Matrix powers real drive times.")
     gmaps_client = None
     address_bias_location = None
@@ -435,10 +438,8 @@ with st.sidebar:
                 gmaps_client = googlemaps.Client(key=google_api_key)
                 st.success("Google Maps enabled.")
                 address_bias_location = geocode_search_center(gmaps_client, address_search_center)
-                if address_bias_location:
-                    st.caption(f"Address suggestions biased near {address_search_center} within about {address_search_radius_miles} miles.")
-                else:
-                    st.caption("Could not geocode the search center. Suggestions will not be location-biased.")
+                if not address_bias_location:
+                    st.caption("Could not geocode the default search center. Suggestions will not be location-biased.")
             except Exception as exc:
                 st.error(f"Could not load Google Maps: {exc}")
 
