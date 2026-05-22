@@ -428,24 +428,29 @@ estimator_options = ["Any"] + estimator_names
 st.markdown("<div class='section-card'><div class='step-title'><span class='step-pill'>2</span>Add Lead with Google Autocomplete</div>", unsafe_allow_html=True)
 if not gmaps_client:
     st.warning("Add your Google Maps API key to .streamlit/secrets.toml or paste it in the sidebar to search addresses.")
-lookup_col, button_col = st.columns([4, 1])
-with lookup_col:
-    address_query = st.text_input("Start typing customer address", placeholder="Example: 123 Main St Chattanooga")
-with button_col:
-    st.write("")
-    st.write("")
-    if st.button("Search Google", use_container_width=True):
-        suggestions, error = google_address_predictions(gmaps_client, address_query, country_code)
-        st.session_state.address_suggestions = suggestions
-        if error:
-            st.warning(error)
-        elif not suggestions:
-            st.warning("No matching Google addresses found. Try adding city and state.")
+
+address_query = st.text_input(
+    "Start typing customer address",
+    placeholder="Example: 123 Main St Chattanooga",
+    help="Suggestions appear automatically after at least 3 characters.",
+)
+
 selected_address = ""
-if st.session_state.address_suggestions:
-    selected_address = st.selectbox("Choose the correct Google address", st.session_state.address_suggestions)
+if not address_query.strip():
+    st.info("Start typing an address. Google suggestions will appear below.")
+elif len(address_query.strip()) < 3:
+    st.info("Keep typing. Suggestions start after 3 characters.")
+elif not gmaps_client:
+    st.warning("Google Maps is not enabled yet. Check your API key in .streamlit/secrets.toml or the sidebar.")
 else:
-    st.info("Search Google and select a suggested address before adding the lead.")
+    suggestions, error = google_address_predictions(gmaps_client, address_query, country_code)
+    if error:
+        st.warning(error)
+    elif suggestions:
+        selected_address = st.selectbox("Choose the correct Google address", suggestions, key="google_address_choice")
+    else:
+        st.warning("No matching Google addresses found. Try adding city and state.")
+
 lead_col_1, lead_col_2, lead_col_3 = st.columns([2, 2, 1])
 with lead_col_1:
     new_name = st.text_input("Customer name", placeholder="John Smith")
@@ -457,14 +462,13 @@ with lead_col_3:
     new_estimator = st.selectbox("Required estimator", estimator_options, index=0)
 if st.button("➕ Add Google Address Lead", type="primary"):
     if is_blank(selected_address):
-        st.error("Search Google and select an address before adding the lead.")
+        st.error("Select a Google address suggestion before adding the lead.")
     elif not new_blocks:
         st.error("Choose at least one customer availability block.")
     elif not estimator_names:
         st.error("Select at least one working estimator before adding leads.")
     else:
         add_lead(new_name, selected_address, new_blocks, new_priority, new_estimator, new_notes)
-        st.session_state.address_suggestions = []
         st.success("Lead added from Google autocomplete.")
 st.markdown("</div>", unsafe_allow_html=True)
 
